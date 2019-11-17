@@ -32,11 +32,12 @@ class InputExample(object):
         label: (Optional) string. The label of the example. This should be
         specified for train and dev examples, but not for test examples.
     """
-    def __init__(self, guid, text_a, text_b=None, label=None):
+    def __init__(self, guid, text_a, text_b=None, label_b=None, label_m=None):
         self.guid = guid
         self.text_a = text_a
         self.text_b = text_b
-        self.label = label
+        self.label_binary = label_b
+        self.label_multi = label_m
 
     def __repr__(self):
         return str(self.to_json_string())
@@ -64,11 +65,12 @@ class InputFeatures(object):
         label: Label corresponding to the input
     """
 
-    def __init__(self, input_ids, attention_mask, token_type_ids, label):
+    def __init__(self, input_ids, attention_mask, token_type_ids, label_b,label_m):
         self.input_ids = input_ids
         self.attention_mask = attention_mask
         self.token_type_ids = token_type_ids
-        self.label = label
+        self.label_binary = label_b
+        self.label_multi = label_m
 
     def __repr__(self):
         return str(self.to_json_string())

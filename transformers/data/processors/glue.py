@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 def glue_convert_examples_to_features(examples, tokenizer,
                                       max_length=512,
                                       task=None,
-                                      label_list=None,
+                                      binary_label_list=None,
+                                      multi_label_list=None,
                                       output_mode=None,
                                       pad_on_left=False,
                                       pad_token=0,
@@ -65,14 +66,16 @@ def glue_convert_examples_to_features(examples, tokenizer,
 
     if task is not None:
         processor = glue_processors[task]()
-        if label_list is None:
-            label_list = processor.get_labels()
-            logger.info("Using label list %s for task %s" % (label_list, task))
+        if binary_label_list is None:
+            binary_label_list = processor.get_binary_labels()
+            multi_label_list = processor.get_multi_labels()
+            logger.info("Using label list %s for task %s" % (binary_label_list, task))
         if output_mode is None:
             output_mode = glue_output_modes[task]
             logger.info("Using output mode %s for task %s" % (output_mode, task))
 
-    label_map = {label: i for i, label in enumerate(label_list)}
+    binary_label_map = {label: i for i, label in enumerate(binary_label_list)}
+    multi_label_map = {label: i for i, label in enumerate(multi_label_list)}
 
     features = []
     for (ex_index, example) in enumerate(examples):
@@ -110,7 +113,8 @@ def glue_convert_examples_to_features(examples, tokenizer,
         assert len(token_type_ids) == max_length, "Error with input length {} vs {}".format(len(token_type_ids), max_length)
 
         if output_mode == "classification":
-            label = label_map[example.label]
+            label_binary = binary_label_map[example.label_b]
+            label_multi = multi_label_map[example.label_m]
         elif output_mode == "regression":
             label = float(example.label)
         else:
@@ -122,13 +126,12 @@ def glue_convert_examples_to_features(examples, tokenizer,
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("attention_mask: %s" % " ".join([str(x) for x in attention_mask]))
             logger.info("token_type_ids: %s" % " ".join([str(x) for x in token_type_ids]))
-            logger.info("label: %s (id = %d)" % (example.label, label))
+            logger.info("label: %s (id = %d)" % (example.label_b, label_binary))
 
-        features.append(
-                InputFeatures(input_ids=input_ids,
+        features.append(InputFeatures(input_ids=input_ids,
                               attention_mask=attention_mask,
                               token_type_ids=token_type_ids,
-                              label=label))
+                              label_b=label_binary,label_m=label_multi))
 
     if is_tf_available() and is_tf_dataset:
         def gen():
@@ -193,6 +196,7 @@ class MrpcProcessor(DataProcessor):
 
 class MnliProcessor(DataProcessor):
     """Processor for the MultiNLI data set (GLUE version)."""
+
 
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
@@ -276,6 +280,64 @@ class ColaProcessor(DataProcessor):
                 InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
         return examples
 
+class MultiTaskProcessor(DataProcessor):
+    """Processor for the MultiTask data set (GLUE version)."""
+    def __init__(self):
+        self.binary_labels=[]
+        self.multi_labels = []
+
+    def get_example_from_tensor_dict(self, tensor_dict):
+        """See base class."""
+        return InputExample(tensor_dict['idx'].numpy(),
+                            tensor_dict['sentence'].numpy().decode('utf-8'),
+                            None,
+                            str(tensor_dict['label'].numpy()))
+
+    def get_train_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+
+    def get_dev_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+
+    def get_binary_labels(self):
+        """See base class."""
+        if(not self.binary_labels ):
+            self.binary_labels=["0","1"]
+        return self.binary_labels
+
+    def set_binary_labels(self,labels):
+        """See base class."""
+        self.binary_labels = labels
+
+
+    def get_multi_labels(self):
+        """See base class."""
+        if(not self.multi_labels ):
+            self.binary_labels=["0","1","2","3","4","5"]
+
+        return self.multi_labels
+
+    def set_multi_labels(self,labels):
+        """See base class."""
+        self.multi_labels = labels
+
+    def _create_examples(self, lines, set_type):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for (i, line) in enumerate(lines):
+            if i == 0:
+                continue
+            guid = "%s-%s" % (set_type, i)
+            text_a = line[0]
+            label_binary = line[1]
+            label_multi = line[2]
+            examples.append(
+                InputExample(guid=guid, text_a=text_a, text_b=None, label_b=label_binary,label_m=label_multi))
+        return examples
 
 class Sst2Processor(DataProcessor):
     """Processor for the SST-2 data set (GLUE version)."""
@@ -523,6 +585,7 @@ glue_tasks_num_labels = {
     "qnli": 2,
     "rte": 2,
     "wnli": 2,
+    "multitask":{"binary":2, "multi":6},
 }
 
 glue_processors = {
@@ -536,6 +599,7 @@ glue_processors = {
     "qnli": QnliProcessor,
     "rte": RteProcessor,
     "wnli": WnliProcessor,
+    "multitask":MultiTaskProcessor,
 }
 
 glue_output_modes = {
@@ -549,4 +613,5 @@ glue_output_modes = {
     "qnli": "classification",
     "rte": "classification",
     "wnli": "classification",
+    "multitask":"classification",
 }

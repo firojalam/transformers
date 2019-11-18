@@ -994,6 +994,8 @@ class BertForSequenceClassification(BertPreTrainedModel):
         super(BertForSequenceClassification, self).__init__(config)
         self.num_binary_labels = config.num_binary_labels
         self.num_multi_labels = config.num_multi_labels
+        self.loss_param_b = config.loss_param_b
+        self.loss_param_m = config.loss_param_m
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -1019,7 +1021,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
         logits_m = self.classifier_multi(pooled_output)
 
         # need to check with Hassan
-        outputs = (logits_b,) + outputs[2:]  # add hidden states and attention if they are here
+        outputs = (logits_b,logits_m,) + outputs[2:]  # add hidden states and attention if they are here
 
         if labels_binary is not None:
             if self.num_binary_labels == 1:
@@ -1030,10 +1032,10 @@ class BertForSequenceClassification(BertPreTrainedModel):
                 loss_fct = CrossEntropyLoss()
                 loss_b = loss_fct(logits_b.view(-1, self.num_binary_labels), labels_binary.view(-1))
                 loss_m = loss_fct(logits_m.view(-1, self.num_multi_labels), labels_multi.view(-1))
-                loss = loss_b + loss_m
+                loss = (self.loss_param_b*loss_b + self.loss_param_m*loss_m)/2
             outputs = (loss,) + outputs
 
-        return outputs  # (loss), logits, (hidden_states), (attentions)
+        return outputs  # (loss), logits_a, logits_b, (hidden_states), (attentions)
 
 
 @add_start_docstrings("""Bert Model with a multiple choice classification head on top (a linear layer on top of

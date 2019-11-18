@@ -249,32 +249,45 @@ def evaluate(args, model, tokenizer, prefix=""):
                 if args.model_type != 'distilbert':
                     inputs['token_type_ids'] = batch[2] if args.model_type in ['bert', 'xlnet'] else None  # XLM, DistilBERT and RoBERTa don't use segment_ids
                 outputs = model(**inputs)
-                tmp_eval_loss, logits = outputs[:2]
+                tmp_eval_loss, logits_b,logits_m = outputs[:3]
 
                 eval_loss += tmp_eval_loss.mean().item()
             nb_eval_steps += 1
             if preds is None:
-                preds = logits.detach().cpu().numpy()
-                out_label_ids = inputs['labels'].detach().cpu().numpy()
+                # preds = logits_b.detach().cpu().numpy()
+                preds_binary = logits_b.detach().cpu().numpy()
+                preds_multi = logits_m.detach().cpu().numpy()
+                out_label_ids_binary = inputs['labels_binary'].detach().cpu().numpy()
+                out_label_ids_multi = inputs['labels_multi'].detach().cpu().numpy()
             else:
-                preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-                out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy(), axis=0)
+                # preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
+                # out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy(), axis=0)
+                preds_binary = np.append(preds_binary, logits_b.detach().cpu().numpy(), axis=0)
+                preds_multi = np.append(preds_multi, logits_m.detach().cpu().numpy(), axis=0)
+                out_label_ids_binary = np.append(out_label_ids_binary, inputs['labels_binary'].detach().cpu().numpy(), axis=0)
+                out_label_ids_multi = np.append(out_label_ids_multi, inputs['labels_multi'].detach().cpu().numpy(), axis=0)
 
         eval_loss = eval_loss / nb_eval_steps
         if args.output_mode == "classification":
-            preds = np.argmax(preds, axis=1)
+            preds_binary = np.argmax(preds_binary, axis=1)
+            preds_multi = np.argmax(preds_multi, axis=1)
         elif args.output_mode == "regression":
             preds = np.squeeze(preds)
-        result = compute_metrics(eval_task, preds, out_label_ids)
-        results.update(result)
+        result_binary = compute_metrics(eval_task, preds_binary, out_label_ids_binary)
+        result_multi = compute_metrics(eval_task, preds_multi, out_label_ids_multi)
+        results.update(result_binary)
+        results.update(result_multi)
 
         output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
         with open(output_eval_file, "w") as writer:
             logger.info("***** Eval results {} *****".format(prefix))
-            for key in sorted(result.keys()):
-                logger.info("  %s = %s", key, str(result[key]))
-                writer.write("%s = %s\n" % (key, str(result[key])))
-
+            for key in sorted(result_binary.keys()):
+                logger.info("  %s = %s", key, str(result_binary[key]))
+                writer.write("%s = %s\n" % (key, str(result_binary[key])))
+            for key in sorted(result_multi.keys()):
+                logger.info("  %s = %s", key, str(result_multi[key]))
+                writer.write("%s = %s\n" % (key, str(result_multi[key])))
+                
     return results
 
 

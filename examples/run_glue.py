@@ -16,6 +16,9 @@
 """ Finetuning the library models for sequence classification on GLUE (Bert, XLM, XLNet, RoBERTa)."""
 
 from __future__ import absolute_import, division, print_function
+import sys
+sys.path.append("/home/local/QCRI/fialam/exp_multitask_text_classification_bert/transformers/transformers/")
+
 
 import argparse
 import glob
@@ -49,13 +52,15 @@ from transformers import (WEIGHTS_NAME, BertConfig,
                                   DistilBertForSequenceClassification,
                                   DistilBertTokenizer)
 
-# from transformers import AdamW, get_linear_schedule_with_warmup
-from transformers import AdamW
-from transformers import WarmupLinearSchedule as get_linear_schedule_with_warmup
+from transformers import AdamW, get_linear_schedule_with_warmup
+# from transformers import AdamW
+# from transformers import WarmupLinearSchedule as get_linear_schedule_with_warmup
 from transformers import glue_compute_metrics as compute_metrics
 from transformers import glue_output_modes as output_modes
 from transformers import glue_processors as processors
 from transformers import glue_convert_examples_to_features as convert_examples_to_features
+
+# print(processors)
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +152,7 @@ def train(args, train_dataset, model, tokenizer):
                 inputs['token_type_ids'] = batch[2] if args.model_type in ['bert', 'xlnet'] else None  # XLM, DistilBERT and RoBERTa don't use segment_ids
             outputs = model(**inputs)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
-
+            print("loss: "+ str(loss))
             if args.n_gpu > 1:
                 loss = loss.mean() # mean() to average on multi-gpu parallel training
             if args.gradient_accumulation_steps > 1:
@@ -295,7 +300,7 @@ def evaluate(args, model, tokenizer, prefix=""):
 def load_and_cache_examples(args, task, tokenizer, evaluate=False):
     if args.local_rank not in [-1, 0] and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
-    print(processors)
+    #print(processors)
     processor = processors[task]()
     output_mode = output_modes[task]
     # Load data features from cache or dataset file
@@ -337,11 +342,12 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
     all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
     all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
     if output_mode == "classification":
-        all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
+        all_labels_binary = torch.tensor([f.label_binary for f in features], dtype=torch.long)
+        all_labels_multi = torch.tensor([f.label_multi for f in features], dtype=torch.long)
     elif output_mode == "regression":
         all_labels = torch.tensor([f.label for f in features], dtype=torch.float)
 
-    dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_labels)
+    dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_labels_binary, all_labels_multi)
     return dataset
 
 
@@ -486,6 +492,8 @@ def main():
 
     # Prepare GLUE task
     args.task_name = args.task_name.lower()
+    #print(processors)
+    #print(args.task_name )
     if args.task_name not in processors:
         raise ValueError("Task not found: %s" % (args.task_name))
     processor = processors[args.task_name]()

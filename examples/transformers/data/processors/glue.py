@@ -76,6 +76,8 @@ def glue_convert_examples_to_features(examples, tokenizer,
 
     binary_label_map = {label: i for i, label in enumerate(binary_label_list)}
     multi_label_map = {label: i for i, label in enumerate(multi_label_list)}
+    # print(multi_label_map)
+    # print(binary_label_map)
 
     features = []
     for (ex_index, example) in enumerate(examples):
@@ -113,8 +115,8 @@ def glue_convert_examples_to_features(examples, tokenizer,
         assert len(token_type_ids) == max_length, "Error with input length {} vs {}".format(len(token_type_ids), max_length)
 
         if output_mode == "classification":
-            label_binary = binary_label_map[example.label_b]
-            label_multi = multi_label_map[example.label_m]
+            label_binary = binary_label_map[example.label_binary]
+            label_multi = multi_label_map[example.label_multi]
         elif output_mode == "regression":
             label = float(example.label)
         else:
@@ -126,7 +128,7 @@ def glue_convert_examples_to_features(examples, tokenizer,
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("attention_mask: %s" % " ".join([str(x) for x in attention_mask]))
             logger.info("token_type_ids: %s" % " ".join([str(x) for x in token_type_ids]))
-            logger.info("label: %s (id = %d)" % (example.label_b, label_binary))
+            logger.info("label: %s (id = %d)" % (example.label_binary, label_binary))
 
         features.append(InputFeatures(input_ids=input_ids,
                               attention_mask=attention_mask,
@@ -303,6 +305,10 @@ class MultiTaskProcessor(DataProcessor):
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
 
+    # def get_labels(self):
+    #     """See base class."""
+    #     return ["0", "1"]
+
     def get_binary_labels(self):
         """See base class."""
         if(not self.binary_labels ):
@@ -317,7 +323,7 @@ class MultiTaskProcessor(DataProcessor):
     def get_multi_labels(self):
         """See base class."""
         if(not self.multi_labels ):
-            self.binary_labels=["0","1","2","3","4","5"]
+            self.multi_labels=["0","1","2","3","4","5"]
 
         return self.multi_labels
 
@@ -584,8 +590,8 @@ glue_tasks_num_labels = {
     "qqp": 2,
     "qnli": 2,
     "rte": 2,
-    "wnli": 2,
     "multitask":{"binary":2, "multi":6},
+    "wnli": 2,
 }
 
 glue_processors = {
@@ -593,13 +599,13 @@ glue_processors = {
     "mnli": MnliProcessor,
     "mnli-mm": MnliMismatchedProcessor,
     "mrpc": MrpcProcessor,
-    "sst-2": Sst2Processor,
+    "sst-2": MultiTaskProcessor, #Sst2Processor
     "sts-b": StsbProcessor,
     "qqp": QqpProcessor,
     "qnli": QnliProcessor,
     "rte": RteProcessor,
-    "wnli": WnliProcessor,
     "multitask": MultiTaskProcessor,
+    "wnli": WnliProcessor,
 }
 
 glue_output_modes = {
@@ -612,6 +618,6 @@ glue_output_modes = {
     "qqp": "classification",
     "qnli": "classification",
     "rte": "classification",
-    "wnli": "classification",
     "multitask":"classification",
+    "wnli": "classification",
 }

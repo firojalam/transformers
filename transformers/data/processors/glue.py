@@ -599,7 +599,7 @@ glue_processors = {
     "qnli": QnliProcessor,
     "rte": RteProcessor,
     "wnli": WnliProcessor,
-    "multitask":MultiTaskProcessor,
+    "multitask": MultiTaskProcessor,
 }
 
 glue_output_modes = {

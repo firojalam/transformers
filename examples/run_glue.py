@@ -49,8 +49,9 @@ from transformers import (WEIGHTS_NAME, BertConfig,
                                   DistilBertForSequenceClassification,
                                   DistilBertTokenizer)
 
-from transformers import AdamW, get_linear_schedule_with_warmup
-
+# from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import AdamW
+from transformers import WarmupLinearSchedule as get_linear_schedule_with_warmup
 from transformers import glue_compute_metrics as compute_metrics
 from transformers import glue_output_modes as output_modes
 from transformers import glue_processors as processors

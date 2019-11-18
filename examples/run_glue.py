@@ -287,7 +287,7 @@ def evaluate(args, model, tokenizer, prefix=""):
             for key in sorted(result_multi.keys()):
                 logger.info("  %s = %s", key, str(result_multi[key]))
                 writer.write("%s = %s\n" % (key, str(result_multi[key])))
-                
+
     return results
 
 

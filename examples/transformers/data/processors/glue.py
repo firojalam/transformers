@@ -318,7 +318,7 @@ class MultiTaskProcessor(DataProcessor):
     def get_binary_labels(self):
         """See base class."""
         if(not self.binary_labels ):
-            self.binary_labels=["0","1"]
+            self.binary_labels=[0,1]
         return self.binary_labels
 
     def set_binary_labels(self,labels):
@@ -329,7 +329,7 @@ class MultiTaskProcessor(DataProcessor):
     def get_multi_labels(self):
         """See base class."""
         if(not self.multi_labels ):
-            self.multi_labels=["0","1","2","3","4","5"]
+            self.multi_labels=[0,1,2,3,4,5]
 
         return self.multi_labels
 
@@ -347,9 +347,9 @@ class MultiTaskProcessor(DataProcessor):
                 continue
             guid = "%s-%s" % (set_type, i)
             text_a = line[0]
-            label_binary = line[1]
+            label_binary = int(line[1])
             label_binary_list.append(label_binary)
-            label_multi = line[2]
+            label_multi = int(line[2])
             label_multi_list.append(label_multi)
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=None, label_b=label_binary,label_m=label_multi))

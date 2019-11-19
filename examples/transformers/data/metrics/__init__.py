@@ -63,6 +63,8 @@ if _has_sklearn:
         acc = simple_accuracy(preds, labels)
         prf = precision_recall_fscore_support(y_true=labels, y_pred=preds, average='weighted')
         # prf_per_class = precision_recall_fscore_support(y_true=labels, y_pred=preds, average=None, labels=label_list)
+        print(label_list)
+        print(list(set(labels)))
         prf_per_class = classification_report(y_true=labels, y_pred=preds, digits=4, labels=label_list)
         # to calculate per class accuracy
         cm = confusion_matrix(y_true=labels, y_pred=preds)

@@ -282,8 +282,13 @@ def evaluate(args, model, tokenizer, prefix=""):
             preds_multi = np.argmax(preds_multi, axis=1)
         elif args.output_mode == "regression":
             preds = np.squeeze(preds)
-        result_binary = compute_metrics(eval_task, preds_binary, out_label_ids_binary)
-        result_multi = compute_metrics(eval_task, preds_multi, out_label_ids_multi)
+
+        processor = processors[args.task_name]()
+        binary_label_list = processor.get_binary_labels()
+        multi_label_list = processor.get_multi_labels()
+
+        result_binary = compute_metrics(eval_task, preds_binary, out_label_ids_binary,binary_label_list)
+        result_multi = compute_metrics(eval_task, preds_multi, out_label_ids_multi,multi_label_list)
         results.update(result_binary)
         results.update(result_multi)
 

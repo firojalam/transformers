@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 try:
     from scipy.stats import pearsonr, spearmanr
-    from sklearn.metrics import matthews_corrcoef, f1_score
+    #from sklearn.metrics import matthews_corrcoef, f1_score
+    from sklearn.metrics import matthews_corrcoef, f1_score, precision_recall_fscore_support, classification_report, \
+        confusion_matrix, roc_auc_score
     _has_sklearn = True
 except (AttributeError, ImportError) as e:
     logger.warning("To use data.metrics please install scikit-learn. See https://scikit-learn.org/stable/index.html")
@@ -57,14 +59,34 @@ if _has_sklearn:
         }
 
 
-    def glue_compute_metrics(task_name, preds, labels):
+    def acc_and_p_r_f_per_class(preds, labels, label_list):
+        acc = simple_accuracy(preds, labels)
+        prf = precision_recall_fscore_support(y_true=labels, y_pred=preds, average='weighted')
+        # prf_per_class = precision_recall_fscore_support(y_true=labels, y_pred=preds, average=None, labels=label_list)
+        prf_per_class = classification_report(y_true=labels, y_pred=preds, digits=4, labels=label_list)
+        # to calculate per class accuracy
+        cm = confusion_matrix(y_true=labels, y_pred=preds)
+
+        return {
+            "acc": acc,
+            "prec": prf[0],
+            "rec": prf[1],
+            "f1": prf[2],
+            "perclass": prf_per_class,
+            "confusion_matrix": cm,
+            "perclassAcc": cm.diagonal() / cm.sum(axis=1),
+        }
+
+
+    def glue_compute_metrics(task_name, preds, labels,label_list):
         assert len(preds) == len(labels)
         if task_name == "cola":
             return {"mcc": matthews_corrcoef(labels, preds)}
         elif task_name == "sst-2":
             return {"acc": simple_accuracy(preds, labels)}
         elif task_name == "multitask":
-            return {"acc-multitask: ": simple_accuracy(preds, labels)}
+            #return {"acc-multitask: ": simple_accuracy(preds, labels)}
+            return {"acc-multitask": acc_and_p_r_f_per_class(preds, labels, label_list)}
         elif task_name == "mrpc":
             return acc_and_f1(preds, labels)
         elif task_name == "sts-b":

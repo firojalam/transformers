@@ -19,6 +19,7 @@ import sys
 import logging
 import numpy as np
 import re
+import pandas as pd
 logger = logging.getLogger(__name__)
 
 try:
@@ -59,6 +60,33 @@ if _has_sklearn:
             "corr": (pearson_corr + spearman_corr) / 2,
         }
 
+    def format_conf_mat(y_true,y_pred):
+
+        conf_mat = pd.crosstab(np.array(y_true), np.array(y_pred), rownames=['gold'], colnames=['pred'], margins=True)
+        pred_columns = conf_mat.columns.tolist()
+        gold_rows = conf_mat.index.tolist()
+        conf_mat_str = ""
+        header = "Pred\nGold"
+        for h in pred_columns:
+            header = header + "\t" + str(h)
+        conf_mat_str = header + "\n"
+        index = 0
+        for r_index, row in conf_mat.iterrows():
+            row_str = str(gold_rows[index])  # for class label (name)
+            index += 1
+            for col_item in row:
+                row_str = row_str + "\t" + str(col_item)
+            conf_mat_str = conf_mat_str + row_str + "\n"
+        return conf_mat_str
+
+
+    def format_classifaction_report(report):
+        report_data = "class_label\tP\tR\tF1\tsupport\n"
+        for k,row in report.items():
+            if(k=="accuracy"):
+                continue
+            report_data = report_data+str(k)+"\t"+str(row['precision'])+"\t"+str(row['recall'])+"\t"+str(row['f1-score'])+"\t"+str(row['support'])+"\n"
+        return report_data
 
     def acc_and_p_r_f_per_class(preds, labels, label_list):
         acc = simple_accuracy(preds, labels)
@@ -71,11 +99,18 @@ if _has_sklearn:
         logger.info(len(preds))
 
         prf_per_class = classification_report(y_true=labels, y_pred=preds, digits=4, labels=label_list,output_dict=True)
-        prf_per_class = "%s" %str(prf_per_class) #.replace("\n","\n\t")
-        prf_per_class = re.sub(' +', '\t',prf_per_class)
+        prf_per_class = format_classifaction_report(prf_per_class)
         # to calculate per class accuracy
         cm = confusion_matrix(y_true=labels, y_pred=preds)
-        cm_str = np.array2string(cm, separator='\t')
+        #cm_str = np.array2string(cm, separator='\t')
+        cm_str = format_conf_mat(labels, preds)
+        per_class_acc=cm.diagonal() / cm.sum(axis=1)
+        #per_class_acc = per_class_acc.tolist()
+        per_class_acc_str =""
+        for item in per_class_acc.tolist():
+            per_class_acc_str=per_class_acc_str+str(item)+"\t"
+
+
         return {
             "acc": acc,
             "prec": prf[0],
@@ -83,7 +118,7 @@ if _has_sklearn:
             "f1": prf[2],
             "perclass": prf_per_class,
             "confusion_matrix": cm_str,
-            "perclassAcc": cm.diagonal() / cm.sum(axis=1),
+            "perclassAcc": per_class_acc_str.strip(),
         }
 
 

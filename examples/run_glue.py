@@ -300,12 +300,41 @@ def evaluate(args, model, tokenizer, prefix=""):
         output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
         with open(output_eval_file, "w") as writer:
             logger.info("***** Eval results {} *****".format(prefix))
+
             for key in sorted(result_binary.keys()):
-                logger.info("  %s = %s", key, str(result_binary[key]))
-                writer.write("%s = %s\n" % (key, result_binary[key]))
+                logger.info("  %s: \n%s", key, result_binary[key])
+                #writer.write("%s = %s\n" % (key, str(result_binary[key])))
+
+            writer.write("binary-informative\n")
+            result_binary=result_binary['acc-multitask']
+            acc=result_binary['acc']
+            P = result_binary['prec']
+            R = result_binary['rec']
+            F1 = result_binary['f1']
+            writer.write("acc\tR\tR\tF1\n")
+            writer.write(str(acc)+"\t"+str(P)+"\t"+str(R)+"\t"+str(F1)+"\n")
+            writer.write(result_binary['perclass'] + "\n")
+            writer.write(result_binary['confusion_matrix'] + "\n")
+            writer.write(result_binary['perclassAcc']+"\n")
+
+
+
+            writer.write("multiclass-humanitarian\n")
+            result_multi = result_multi['acc-multitask']
+            acc=result_multi['acc']
+            P = result_multi['prec']
+            R = result_multi['rec']
+            F1 = result_multi['f1']
+            writer.write("acc\tR\tR\tF1\n")
+            writer.write(str(acc) + "\t" + str(P) + "\t" + str(R) + "\t" + str(F1) + "\n")
+            writer.write(result_multi['perclass']+"\n")
+
+            writer.write(result_multi['confusion_matrix'] + "\n")
+            writer.write(result_multi['perclassAcc'] + "\n")
+
             for key in sorted(result_multi.keys()):
-                logger.info("  %s = %s", key, str(result_multi[key]))
-                writer.write("%s = %s\n" % (key, result_multi[key]))
+                logger.info("  %s = %s", key, result_multi[key])
+                #writer.write("%s = %s\n" % (key, str(result_multi[key])))
 
     return results
 

@@ -1033,7 +1033,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
                 loss_fct = CrossEntropyLoss()
                 loss_b = loss_fct(logits_b.view(-1, self.num_binary_labels), labels_binary.view(-1))
                 loss_m = loss_fct(logits_m.view(-1, self.num_multi_labels), labels_multi.view(-1))
-                loss = (self.loss_param_b*loss_b + self.loss_param_m*loss_m)/2
+                loss = (self.loss_param_b*loss_b + self.loss_param_m*loss_m) #/2
                 # loss = (loss_b +  loss_m) / 2
             outputs = (loss,) + outputs
 

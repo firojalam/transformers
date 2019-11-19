@@ -246,6 +246,11 @@ def evaluate(args, model, tokenizer, prefix=""):
         nb_eval_steps = 0
         preds = None
         out_label_ids = None
+        out_label_ids_binary = None
+        out_label_ids_multi = None
+        preds_binary=None
+        preds_multi=None
+
         for batch in tqdm(eval_dataloader, desc="Evaluating"):
             model.eval()
             batch = tuple(t.to(args.device) for t in batch)
@@ -262,7 +267,7 @@ def evaluate(args, model, tokenizer, prefix=""):
 
                 eval_loss += tmp_eval_loss.mean().item()
             nb_eval_steps += 1
-            if preds is None:
+            if preds_binary is None and preds_multi is None:
                 # preds = logits_b.detach().cpu().numpy()
                 preds_binary = logits_b.detach().cpu().numpy()
                 preds_multi = logits_m.detach().cpu().numpy()
@@ -297,10 +302,10 @@ def evaluate(args, model, tokenizer, prefix=""):
             logger.info("***** Eval results {} *****".format(prefix))
             for key in sorted(result_binary.keys()):
                 logger.info("  %s = %s", key, str(result_binary[key]))
-                writer.write("%s = %s\n" % (key, str(result_binary[key])))
+                writer.write("%s = %s\n" % (key, result_binary[key]))
             for key in sorted(result_multi.keys()):
                 logger.info("  %s = %s", key, str(result_multi[key]))
-                writer.write("%s = %s\n" % (key, str(result_multi[key])))
+                writer.write("%s = %s\n" % (key, result_multi[key]))
 
     return results
 
@@ -338,10 +343,13 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
 
         if(args.do_eval):
             examples = processor.get_dev_examples(args.data_dir)
+            logger.info(len(examples))
         elif(args.do_test):
             examples = processor.get_test_examples(args.data_dir)
+            logger.info(len(examples))
         else:
             examples = processor.get_train_examples(args.data_dir)
+            logger.info(len(examples))
 
 
         features = convert_examples_to_features(examples,
@@ -589,7 +597,7 @@ def main():
 
     # Evaluation
     results = {}
-    if args.do_eval and args.local_rank in [-1, 0]:
+    if (args.do_eval or args.do_test) and args.local_rank in [-1, 0]:
         tokenizer = tokenizer_class.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
         checkpoints = [args.output_dir]
         if args.eval_all_checkpoints:

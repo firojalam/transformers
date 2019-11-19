@@ -17,7 +17,8 @@
 import csv
 import sys
 import logging
-
+import numpy as np
+import re
 logger = logging.getLogger(__name__)
 
 try:
@@ -63,19 +64,25 @@ if _has_sklearn:
         acc = simple_accuracy(preds, labels)
         prf = precision_recall_fscore_support(y_true=labels, y_pred=preds, average='weighted')
         # prf_per_class = precision_recall_fscore_support(y_true=labels, y_pred=preds, average=None, labels=label_list)
-        print(label_list)
-        print(list(set(labels)))
-        prf_per_class = classification_report(y_true=labels, y_pred=preds, digits=4, labels=label_list)
+        #print(label_list)
+        logger.info(list(set(labels)))
+        logger.info(len(labels))
+        logger.info(list(set(preds)))
+        logger.info(len(preds))
+
+        prf_per_class = classification_report(y_true=labels, y_pred=preds, digits=4, labels=label_list,output_dict=True)
+        prf_per_class = "%s" %str(prf_per_class) #.replace("\n","\n\t")
+        prf_per_class = re.sub(' +', '\t',prf_per_class)
         # to calculate per class accuracy
         cm = confusion_matrix(y_true=labels, y_pred=preds)
-
+        cm_str = np.array2string(cm, separator='\t')
         return {
             "acc": acc,
             "prec": prf[0],
             "rec": prf[1],
             "f1": prf[2],
             "perclass": prf_per_class,
-            "confusion_matrix": cm,
+            "confusion_matrix": cm_str,
             "perclassAcc": cm.diagonal() / cm.sum(axis=1),
         }
 

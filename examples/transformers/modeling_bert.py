@@ -1023,6 +1023,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
         # need to check with Hassan
         outputs = (logits_b,logits_m,) + outputs[2:]  # add hidden states and attention if they are here
 
+
         if labels_binary is not None:
             if self.num_binary_labels == 1:
                 #  We are doing regression
@@ -1032,8 +1033,8 @@ class BertForSequenceClassification(BertPreTrainedModel):
                 loss_fct = CrossEntropyLoss()
                 loss_b = loss_fct(logits_b.view(-1, self.num_binary_labels), labels_binary.view(-1))
                 loss_m = loss_fct(logits_m.view(-1, self.num_multi_labels), labels_multi.view(-1))
-                #loss = (self.loss_param_b*loss_b + self.loss_param_m*loss_m)/2
-                loss = loss_b #( loss_b +  loss_m) / 2
+                loss = (self.loss_param_b*loss_b + self.loss_param_m*loss_m)/2
+                # loss = (loss_b +  loss_m) / 2
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits_a, logits_b, (hidden_states), (attentions)

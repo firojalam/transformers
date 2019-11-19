@@ -64,7 +64,7 @@ if _has_sklearn:
         elif task_name == "sst-2":
             return {"acc": simple_accuracy(preds, labels)}
         elif task_name == "multitask":
-            return {"acc": simple_accuracy(preds, labels)}
+            return {"acc-multitask: ": simple_accuracy(preds, labels)}
         elif task_name == "mrpc":
             return acc_and_f1(preds, labels)
         elif task_name == "sts-b":

@@ -125,6 +125,7 @@ def train(args, train_dataset, model, tokenizer):
                                                           find_unused_parameters=True)
 
     # Train!
+
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", len(train_dataset))
     logger.info("  Num Epochs = %d", args.num_train_epochs)
@@ -139,6 +140,8 @@ def train(args, train_dataset, model, tokenizer):
     model.zero_grad()
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproductibility (even between python 2 and 3)
+
+
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
@@ -152,7 +155,7 @@ def train(args, train_dataset, model, tokenizer):
                 inputs['token_type_ids'] = batch[2] if args.model_type in ['bert', 'xlnet'] else None  # XLM, DistilBERT and RoBERTa don't use segment_ids
             outputs = model(**inputs)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
-            print("loss: "+ str(loss))
+            # print("loss: "+ str(loss))
             if args.n_gpu > 1:
                 loss = loss.mean() # mean() to average on multi-gpu parallel training
             if args.gradient_accumulation_steps > 1:
@@ -499,7 +502,7 @@ def main():
     processor = processors[args.task_name]()
     args.output_mode = output_modes[args.task_name]
     binary_label_list = processor.get_binary_labels()
-    multi_label_list = processor.get_binary_labels()
+    multi_label_list = processor.get_multi_labels()
     num_binary_labels = len(binary_label_list)
     num_multi_labels = len(multi_label_list)
 

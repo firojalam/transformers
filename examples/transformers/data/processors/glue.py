@@ -334,15 +334,25 @@ class MultiTaskProcessor(DataProcessor):
     def _create_examples(self, lines, set_type):
         """Creates examples for the training and dev sets."""
         examples = []
+        label_binary_list =[]
+        label_multi_list = []
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
             guid = "%s-%s" % (set_type, i)
             text_a = line[0]
             label_binary = line[1]
+            label_binary_list.append(label_binary)
             label_multi = line[2]
+            label_multi_list.append(label_multi)
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=None, label_b=label_binary,label_m=label_multi))
+        labels=list(set(label_binary_list))
+        self.set_binary_labels(labels)
+        print(labels)
+        labels = list(set(label_multi_list))
+        self.set_multi_labels(labels)
+        print(labels)
         return examples
 
 class Sst2Processor(DataProcessor):

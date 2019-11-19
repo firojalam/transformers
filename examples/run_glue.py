@@ -312,11 +312,19 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
     processor = processors[task]()
     output_mode = output_modes[task]
     # Load data features from cache or dataset file
-    cached_features_file = os.path.join(args.data_dir, 'cached_{}_{}_{}_{}'.format(
-        'dev' if evaluate else 'train',
+
+    if(args.do_eval):
+        dataset='dev'
+    elif(args.do_test):
+        dataset = 'test'
+    else:
+        dataset = 'train'
+
+    cached_features_file = os.path.join(args.data_dir, 'cached_{}_{}_{}_{}'.format(dataset,
         list(filter(None, args.model_name_or_path.split('/'))).pop(),
         str(args.max_seq_length),
         str(task)))
+
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
         logger.info("Loading features from cached file %s", cached_features_file)
         features = torch.load(cached_features_file)
@@ -327,7 +335,15 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
         if task in ['mnli', 'mnli-mm'] and args.model_type in ['roberta']:
             # HACK(label indices are swapped in RoBERTa pretrained model)
             binary_label_list[1], binary_label_list[2] = binary_label_list[2], binary_label_list[1]
-        examples = processor.get_dev_examples(args.data_dir) if evaluate else processor.get_train_examples(args.data_dir)
+
+        if(args.do_eval):
+            examples = processor.get_dev_examples(args.data_dir)
+        elif(args.do_test):
+            examples = processor.get_test_examples(args.data_dir)
+        else:
+            examples = processor.get_train_examples(args.data_dir)
+
+
         features = convert_examples_to_features(examples,
                                                 tokenizer,
                                                 binary_label_list=binary_label_list,
@@ -388,6 +404,9 @@ def main():
                         help="Whether to run training.")
     parser.add_argument("--do_eval", action='store_true',
                         help="Whether to run eval on the dev set.")
+    parser.add_argument("--do_test", action='store_true',
+                        help="Whether to run eval on the test set.")
+
     parser.add_argument("--evaluate_during_training", action='store_true',
                         help="Rul evaluation during training at each logging step.")
     parser.add_argument("--do_lower_case", action='store_true',

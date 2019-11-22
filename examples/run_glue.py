@@ -297,7 +297,7 @@ def evaluate(args, model, tokenizer, prefix=""):
         results.update(result_binary)
         results.update(result_multi)
 
-        output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
+        output_eval_file = os.path.join(eval_output_dir, prefix, args.results_file) #"eval_results.txt"
         with open(output_eval_file, "w") as writer:
             logger.info("***** Eval results {} *****".format(prefix))
 
@@ -443,7 +443,8 @@ def main():
                         help="Whether to run eval on the dev set.")
     parser.add_argument("--do_test", action='store_true',
                         help="Whether to run eval on the test set.")
-
+    parser.add_argument("--results_file", default="eval_results.txt", type=str,
+                        help="File name to write results.")
     parser.add_argument("--evaluate_during_training", action='store_true',
                         help="Rul evaluation during training at each logging step.")
     parser.add_argument("--do_lower_case", action='store_true',

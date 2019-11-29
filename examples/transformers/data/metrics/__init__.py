@@ -88,17 +88,41 @@ if _has_sklearn:
             report_data = report_data+str(k)+"\t"+str(row['precision'])+"\t"+str(row['recall'])+"\t"+str(row['f1-score'])+"\t"+str(row['support'])+"\n"
         return report_data
 
+
+    def roc_auc_score_multiclass(actual_class, pred_class, average="weighted"):
+
+        # creating a set of all the unique classes using the actual class list
+        unique_class = set(actual_class)
+        roc_auc_dict = {}
+        for per_class in unique_class:
+            # creating a list of all the classes except the current class
+            other_class = [x for x in unique_class if x != per_class]
+
+            # marking the current class as 1 and all other classes as 0
+            new_actual_class = [0 if x in other_class else 1 for x in actual_class]
+            new_pred_class = [0 if x in other_class else 1 for x in pred_class]
+
+            # using the sklearn metrics method to calculate the roc_auc_score
+            roc_auc = roc_auc_score(new_actual_class, new_pred_class, average=average)
+            roc_auc_dict[per_class] = roc_auc
+
+        list_values = [v for v in roc_auc_dict.values()]
+        average = np.average(list_values)
+        return average
+
     def acc_and_p_r_f_per_class(preds, labels, label_list):
         acc = simple_accuracy(preds, labels)
         prf = precision_recall_fscore_support(y_true=labels, y_pred=preds, average='weighted')
         # prf_per_class = precision_recall_fscore_support(y_true=labels, y_pred=preds, average=None, labels=label_list)
         #print(label_list)
-        logger.info(list(set(labels)))
-        logger.info(len(labels))
-        logger.info(list(set(preds)))
-        logger.info(len(preds))
+        # logger.info(list(set(labels)))
+        # logger.info(len(labels))
+        # logger.info(list(set(preds)))
+        # logger.info(len(preds))
+        # logger.info(label_list)
+        label_map = [i for i, label in enumerate(label_list)]
 
-        prf_per_class = classification_report(y_true=labels, y_pred=preds, digits=4, labels=label_list,output_dict=True)
+        prf_per_class = classification_report(y_true=labels, y_pred=preds, digits=4, labels=label_map,output_dict=True)
         prf_per_class = format_classifaction_report(prf_per_class)
         # to calculate per class accuracy
         cm = confusion_matrix(y_true=labels, y_pred=preds)
@@ -110,12 +134,14 @@ if _has_sklearn:
         for item in per_class_acc.tolist():
             per_class_acc_str=per_class_acc_str+str(item)+"\t"
 
+        AUC = roc_auc_score_multiclass(labels, preds)
 
         return {
             "acc": acc,
             "prec": prf[0],
             "rec": prf[1],
             "f1": prf[2],
+            "AUC": AUC,
             "perclass": prf_per_class,
             "confusion_matrix": cm_str,
             "perclassAcc": per_class_acc_str.strip(),
@@ -128,9 +154,9 @@ if _has_sklearn:
             return {"mcc": matthews_corrcoef(labels, preds)}
         elif task_name == "sst-2":
             return {"acc": simple_accuracy(preds, labels)}
-        elif task_name == "multitask":
+        elif (task_name == "multitask" or task_name == "multiclass"):
             #return {"acc-multitask: ": simple_accuracy(preds, labels)}
-            return {"acc-multitask": acc_and_p_r_f_per_class(preds, labels, label_list)}
+            return {"results": acc_and_p_r_f_per_class(preds, labels, label_list)}
         elif task_name == "mrpc":
             return acc_and_f1(preds, labels)
         elif task_name == "sts-b":

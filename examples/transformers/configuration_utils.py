@@ -50,6 +50,7 @@ class PretrainedConfig(object):
 
     def __init__(self, **kwargs):
         self.finetuning_task = kwargs.pop('finetuning_task', None)
+        self.num_labels = kwargs.pop('num_labels', 2)
         self.num_binary_labels = kwargs.pop('num_binary_labels', 2)
         self.num_multi_labels = kwargs.pop('num_multi_labels', 6)
         self.output_attentions = kwargs.pop('output_attentions', False)

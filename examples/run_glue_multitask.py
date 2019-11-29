@@ -16,6 +16,7 @@
 """ Finetuning the library models for sequence classification on GLUE (Bert, XLM, XLNet, RoBERTa)."""
 
 from __future__ import absolute_import, division, print_function
+import sys
 
 import argparse
 import glob
@@ -50,11 +51,14 @@ from transformers import (WEIGHTS_NAME, BertConfig,
                                   DistilBertTokenizer)
 
 from transformers import AdamW, get_linear_schedule_with_warmup
-
+# from transformers import AdamW
+# from transformers import WarmupLinearSchedule as get_linear_schedule_with_warmup
 from transformers import glue_compute_metrics as compute_metrics
 from transformers import glue_output_modes as output_modes
 from transformers import glue_processors as processors
 from transformers import glue_convert_examples_to_features as convert_examples_to_features
+
+# print(processors)
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +123,7 @@ def train(args, train_dataset, model, tokenizer):
                                                           find_unused_parameters=True)
 
     # Train!
+
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", len(train_dataset))
     logger.info("  Num Epochs = %d", args.num_train_epochs)
@@ -133,6 +138,8 @@ def train(args, train_dataset, model, tokenizer):
     model.zero_grad()
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproductibility (even between python 2 and 3)
+
+
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
@@ -140,12 +147,13 @@ def train(args, train_dataset, model, tokenizer):
             batch = tuple(t.to(args.device) for t in batch)
             inputs = {'input_ids':      batch[0],
                       'attention_mask': batch[1],
-                      'labels':         batch[3]}
+                      'labels_binary':  batch[3],
+                      'labels_multi': batch[4]}
             if args.model_type != 'distilbert':
                 inputs['token_type_ids'] = batch[2] if args.model_type in ['bert', 'xlnet'] else None  # XLM, DistilBERT and RoBERTa don't use segment_ids
             outputs = model(**inputs)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
-
+            # print("loss: "+ str(loss))
             if args.n_gpu > 1:
                 loss = loss.mean() # mean() to average on multi-gpu parallel training
             if args.gradient_accumulation_steps > 1:
@@ -158,7 +166,7 @@ def train(args, train_dataset, model, tokenizer):
                 loss.backward()
 
             tr_loss += loss.item()
-            if (step + 1) % args.gradient_accumulation_steps == 0:
+            if (step + 1) % args.gradient_accumulation_steps == 0 and not args.tpu:
                 if args.fp16:
                     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
                 else:
@@ -188,6 +196,11 @@ def train(args, train_dataset, model, tokenizer):
                     model_to_save.save_pretrained(output_dir)
                     torch.save(args, os.path.join(output_dir, 'training_args.bin'))
                     logger.info("Saving model checkpoint to %s", output_dir)
+
+            if args.tpu:
+                args.xla_model.optimizer_step(optimizer, barrier=True)
+                model.zero_grad()
+                global_step += 1
 
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
@@ -231,6 +244,11 @@ def evaluate(args, model, tokenizer, prefix=""):
         nb_eval_steps = 0
         preds = None
         out_label_ids = None
+        out_label_ids_binary = None
+        out_label_ids_multi = None
+        preds_binary=None
+        preds_multi=None
+
         for batch in tqdm(eval_dataloader, desc="Evaluating"):
             model.eval()
             batch = tuple(t.to(args.device) for t in batch)
@@ -238,35 +256,83 @@ def evaluate(args, model, tokenizer, prefix=""):
             with torch.no_grad():
                 inputs = {'input_ids':      batch[0],
                           'attention_mask': batch[1],
-                          'labels':         batch[3]}
+                          'labels_binary': batch[3],
+                          'labels_multi': batch[4]}
                 if args.model_type != 'distilbert':
                     inputs['token_type_ids'] = batch[2] if args.model_type in ['bert', 'xlnet'] else None  # XLM, DistilBERT and RoBERTa don't use segment_ids
                 outputs = model(**inputs)
-                tmp_eval_loss, logits = outputs[:2]
+                tmp_eval_loss, logits_b,logits_m = outputs[:3]
 
                 eval_loss += tmp_eval_loss.mean().item()
             nb_eval_steps += 1
-            if preds is None:
-                preds = logits.detach().cpu().numpy()
-                out_label_ids = inputs['labels'].detach().cpu().numpy()
+            if preds_binary is None and preds_multi is None:
+                # preds = logits_b.detach().cpu().numpy()
+                preds_binary = logits_b.detach().cpu().numpy()
+                preds_multi = logits_m.detach().cpu().numpy()
+                out_label_ids_binary = inputs['labels_binary'].detach().cpu().numpy()
+                out_label_ids_multi = inputs['labels_multi'].detach().cpu().numpy()
             else:
-                preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-                out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy(), axis=0)
+                # preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
+                # out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy(), axis=0)
+                preds_binary = np.append(preds_binary, logits_b.detach().cpu().numpy(), axis=0)
+                preds_multi = np.append(preds_multi, logits_m.detach().cpu().numpy(), axis=0)
+                out_label_ids_binary = np.append(out_label_ids_binary, inputs['labels_binary'].detach().cpu().numpy(), axis=0)
+                out_label_ids_multi = np.append(out_label_ids_multi, inputs['labels_multi'].detach().cpu().numpy(), axis=0)
 
         eval_loss = eval_loss / nb_eval_steps
         if args.output_mode == "classification":
-            preds = np.argmax(preds, axis=1)
+            preds_binary = np.argmax(preds_binary, axis=1)
+            preds_multi = np.argmax(preds_multi, axis=1)
         elif args.output_mode == "regression":
             preds = np.squeeze(preds)
-        result = compute_metrics(eval_task, preds, out_label_ids)
-        results.update(result)
 
-        output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
+        processor = processors[args.task_name]()
+        binary_label_list = processor.get_binary_labels()
+        multi_label_list = processor.get_multi_labels()
+
+        result_binary = compute_metrics(eval_task, preds_binary, out_label_ids_binary,binary_label_list)
+        result_multi = compute_metrics(eval_task, preds_multi, out_label_ids_multi,multi_label_list)
+        results.update(result_binary)
+        results.update(result_multi)
+
+        output_eval_file = os.path.join(eval_output_dir, prefix, args.results_file) #"eval_results.txt"
         with open(output_eval_file, "w") as writer:
             logger.info("***** Eval results {} *****".format(prefix))
-            for key in sorted(result.keys()):
-                logger.info("  %s = %s", key, str(result[key]))
-                writer.write("%s = %s\n" % (key, str(result[key])))
+
+            for key in sorted(result_binary.keys()):
+                logger.info("  %s: \n%s", key, result_binary[key])
+                #writer.write("%s = %s\n" % (key, str(result_binary[key])))
+
+            writer.write("binary-informative\n")
+            result_binary=result_binary['results']
+            acc=result_binary['acc']
+            P = result_binary['prec']
+            R = result_binary['rec']
+            F1 = result_binary['f1']
+            writer.write("acc\tR\tR\tF1\n")
+            writer.write(str(acc)+"\t"+str(P)+"\t"+str(R)+"\t"+str(F1)+"\n")
+            writer.write(result_binary['perclass'] + "\n")
+            writer.write(result_binary['confusion_matrix'] + "\n")
+            writer.write(result_binary['perclassAcc']+"\n")
+
+
+
+            writer.write("multiclass-humanitarian\n")
+            result_multi = result_multi['results']
+            acc=result_multi['acc']
+            P = result_multi['prec']
+            R = result_multi['rec']
+            F1 = result_multi['f1']
+            writer.write("acc\tR\tR\tF1\n")
+            writer.write(str(acc) + "\t" + str(P) + "\t" + str(R) + "\t" + str(F1) + "\n")
+            writer.write(result_multi['perclass']+"\n")
+
+            writer.write(result_multi['confusion_matrix'] + "\n")
+            writer.write(result_multi['perclassAcc'] + "\n")
+
+            for key in sorted(result_multi.keys()):
+                logger.info("  %s = %s", key, result_multi[key])
+                #writer.write("%s = %s\n" % (key, str(result_multi[key])))
 
     return results
 
@@ -274,28 +340,49 @@ def evaluate(args, model, tokenizer, prefix=""):
 def load_and_cache_examples(args, task, tokenizer, evaluate=False):
     if args.local_rank not in [-1, 0] and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
-
+    #print(processors)
     processor = processors[task]()
     output_mode = output_modes[task]
     # Load data features from cache or dataset file
-    cached_features_file = os.path.join(args.data_dir, 'cached_{}_{}_{}_{}'.format(
-        'dev' if evaluate else 'train',
+
+    if(args.do_eval):
+        dataset='dev'
+    elif(args.do_test):
+        dataset = 'test'
+    else:
+        dataset = 'train'
+
+    cached_features_file = os.path.join(args.data_dir, 'cached_{}_{}_{}_{}'.format(dataset,
         list(filter(None, args.model_name_or_path.split('/'))).pop(),
         str(args.max_seq_length),
         str(task)))
+
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
         logger.info("Loading features from cached file %s", cached_features_file)
         features = torch.load(cached_features_file)
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
-        label_list = processor.get_labels()
+        binary_label_list = processor.get_binary_labels()
+        multi_label_list = processor.get_multi_labels()
         if task in ['mnli', 'mnli-mm'] and args.model_type in ['roberta']:
             # HACK(label indices are swapped in RoBERTa pretrained model)
-            label_list[1], label_list[2] = label_list[2], label_list[1] 
-        examples = processor.get_dev_examples(args.data_dir) if evaluate else processor.get_train_examples(args.data_dir)
+            binary_label_list[1], binary_label_list[2] = binary_label_list[2], binary_label_list[1]
+
+        if(args.do_eval):
+            examples = processor.get_dev_examples(args.data_dir)
+            logger.info(len(examples))
+        elif(args.do_test):
+            examples = processor.get_test_examples(args.data_dir)
+            logger.info(len(examples))
+        else:
+            examples = processor.get_train_examples(args.data_dir)
+            logger.info(len(examples))
+
+
         features = convert_examples_to_features(examples,
                                                 tokenizer,
-                                                label_list=label_list,
+                                                binary_label_list=binary_label_list,
+                                                multi_label_list=multi_label_list,
                                                 max_length=args.max_seq_length,
                                                 output_mode=output_mode,
                                                 pad_on_left=bool(args.model_type in ['xlnet']),                 # pad on the left for xlnet
@@ -314,11 +401,12 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
     all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
     all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
     if output_mode == "classification":
-        all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
+        all_labels_binary = torch.tensor([f.label_binary for f in features], dtype=torch.long)
+        all_labels_multi = torch.tensor([f.label_multi for f in features], dtype=torch.long)
     elif output_mode == "regression":
         all_labels = torch.tensor([f.label for f in features], dtype=torch.float)
 
-    dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_labels)
+    dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_labels_binary, all_labels_multi)
     return dataset
 
 
@@ -351,11 +439,23 @@ def main():
                         help="Whether to run training.")
     parser.add_argument("--do_eval", action='store_true',
                         help="Whether to run eval on the dev set.")
+    parser.add_argument("--do_test", action='store_true',
+                        help="Whether to run eval on the test set.")
+
+    parser.add_argument("--train_file", default="train.tsv", type=str,
+                        help="Training file.")
+    parser.add_argument("--dev_file", default="dev.tsv", type=str,
+                        help="Validation file.")
+    parser.add_argument("--test_file", default="test.tsv", type=str,
+                        help="Test file.")
+    parser.add_argument("--results_file", default="eval_results.txt", type=str,
+                        help="File name to write results.")
+
+
     parser.add_argument("--evaluate_during_training", action='store_true',
                         help="Rul evaluation during training at each logging step.")
     parser.add_argument("--do_lower_case", action='store_true',
                         help="Set this flag if you are using an uncased model.")
-
     parser.add_argument("--per_gpu_train_batch_size", default=8, type=int,
                         help="Batch size per GPU/CPU for training.")
     parser.add_argument("--per_gpu_eval_batch_size", default=8, type=int,
@@ -392,6 +492,15 @@ def main():
     parser.add_argument('--seed', type=int, default=42,
                         help="random seed for initialization")
 
+    parser.add_argument('--tpu', action='store_true',
+                        help="Whether to run on the TPU defined in the environment variables")
+    parser.add_argument('--tpu_ip_address', type=str, default='',
+                        help="TPU IP address if none are set in the environment variables")
+    parser.add_argument('--tpu_name', type=str, default='',
+                        help="TPU name if none are set in the environment variables")
+    parser.add_argument('--xrt_tpu_config', type=str, default='',
+                        help="XRT TPU config if none are set in the environment variables")
+
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit")
     parser.add_argument('--fp16_opt_level', type=str, default='O1',
@@ -425,6 +534,23 @@ def main():
         args.n_gpu = 1
     args.device = device
 
+    if args.tpu:
+        if args.tpu_ip_address:
+            os.environ["TPU_IP_ADDRESS"] = args.tpu_ip_address
+        if args.tpu_name:
+            os.environ["TPU_NAME"] = args.tpu_name
+        if args.xrt_tpu_config:
+            os.environ["XRT_TPU_CONFIG"] = args.xrt_tpu_config
+
+        assert "TPU_IP_ADDRESS" in os.environ
+        assert "TPU_NAME" in os.environ
+        assert "XRT_TPU_CONFIG" in os.environ
+
+        import torch_xla
+        import torch_xla.core.xla_model as xm
+        args.device = xm.xla_device()
+        args.xla_model = xm
+
     # Setup logging
     logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt = '%m/%d/%Y %H:%M:%S',
@@ -437,12 +563,22 @@ def main():
 
     # Prepare GLUE task
     args.task_name = args.task_name.lower()
+    #print(processors)
+    #print(args.task_name )
     if args.task_name not in processors:
         raise ValueError("Task not found: %s" % (args.task_name))
     processor = processors[args.task_name]()
+
+
+    processor.set_train_file(args.train_file)
+    processor.set_dev_file(args.dev_file)
+    processor.set_dev_file(args.test_file)
+
     args.output_mode = output_modes[args.task_name]
-    label_list = processor.get_labels()
-    num_labels = len(label_list)
+    binary_label_list = processor.get_binary_labels()
+    multi_label_list = processor.get_multi_labels()
+    num_binary_labels = len(binary_label_list)
+    num_multi_labels = len(multi_label_list)
 
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:
@@ -451,9 +587,11 @@ def main():
     args.model_type = args.model_type.lower()
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
     config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path,
-                                          num_labels=num_labels,
+                                          num_binary_labels=num_binary_labels,
+                                          num_multi_labels=num_multi_labels,
                                           finetuning_task=args.task_name,
                                           cache_dir=args.cache_dir if args.cache_dir else None)
+
     tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
                                                 do_lower_case=args.do_lower_case,
                                                 cache_dir=args.cache_dir if args.cache_dir else None)
@@ -478,7 +616,7 @@ def main():
 
 
     # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
-    if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
+    if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0) and not args.tpu:
         # Create output directory if needed
         if not os.path.exists(args.output_dir) and args.local_rank in [-1, 0]:
             os.makedirs(args.output_dir)
@@ -501,7 +639,7 @@ def main():
 
     # Evaluation
     results = {}
-    if args.do_eval and args.local_rank in [-1, 0]:
+    if (args.do_eval or args.do_test) and args.local_rank in [-1, 0]:
         tokenizer = tokenizer_class.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
         checkpoints = [args.output_dir]
         if args.eval_all_checkpoints:

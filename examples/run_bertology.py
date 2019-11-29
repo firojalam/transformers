@@ -37,7 +37,7 @@ from transformers import (WEIGHTS_NAME,
                                   XLMConfig, XLMForSequenceClassification, XLMTokenizer,
                                   XLNetConfig, XLNetForSequenceClassification, XLNetTokenizer)
 
-from run_glue import set_seed, load_and_cache_examples, ALL_MODELS, MODEL_CLASSES
+from run_glue_multitask import set_seed, load_and_cache_examples, ALL_MODELS, MODEL_CLASSES
 
 from transformers import glue_compute_metrics as compute_metrics
 from transformers import glue_output_modes as output_modes

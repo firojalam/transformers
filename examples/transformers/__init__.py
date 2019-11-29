@@ -24,7 +24,7 @@ from .file_utils import (TRANSFORMERS_CACHE, PYTORCH_TRANSFORMERS_CACHE, PYTORCH
 
 from .data import (is_sklearn_available,
                    InputExample, InputFeatures, DataProcessor,
-                   glue_output_modes, glue_convert_examples_to_features,
+                   glue_output_modes, glue_convert_examples_to_features, glue_convert_examples_to_features_multiclass,
                    glue_processors, glue_tasks_num_labels)
 
 if is_sklearn_available():
@@ -67,7 +67,7 @@ if is_torch_available():
 
     from .modeling_bert import (BertPreTrainedModel, BertModel, BertForPreTraining,
                                 BertForMaskedLM, BertForNextSentencePrediction,
-                                BertForSequenceClassification, BertForMultipleChoice,
+                                BertForSequenceClassification, BertForSequenceMultiClassClassification, BertForMultipleChoice,
                                 BertForTokenClassification, BertForQuestionAnswering,
                                 load_tf_weights_in_bert, BERT_PRETRAINED_MODEL_ARCHIVE_MAP)
     from .modeling_openai import (OpenAIGPTPreTrainedModel, OpenAIGPTModel,

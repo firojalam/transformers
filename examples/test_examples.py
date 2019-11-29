@@ -27,7 +27,7 @@ try:
 except ImportError:
     from mock import patch
 
-import run_glue
+import run_glue_multitask
 import run_squad
 import run_generation
 
@@ -47,7 +47,7 @@ class ExamplesTests(unittest.TestCase):
         stream_handler = logging.StreamHandler(sys.stdout)
         logger.addHandler(stream_handler)
 
-        testargs = ["run_glue.py",
+        testargs = ["run_glue_multitask.py",
                     "--data_dir=./examples/tests_samples/MRPC/",
                     "--task_name=mrpc",
                     "--do_train",
@@ -63,7 +63,7 @@ class ExamplesTests(unittest.TestCase):
         model_type, model_name = ("--model_type=bert",
                                   "--model_name_or_path=bert-base-uncased")
         with patch.object(sys, 'argv', testargs + [model_type, model_name]):
-            result = run_glue.main()
+            result = run_glue_multitask.main()
             for value in result.values():
                 self.assertGreaterEqual(value, 0.75)
 

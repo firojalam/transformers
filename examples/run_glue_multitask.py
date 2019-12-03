@@ -215,7 +215,7 @@ def train(args, train_dataset, model, tokenizer):
     return global_step, tr_loss / global_step
 
 
-def evaluate(args, model, tokenizer, prefix=""):
+def evaluate(args, model, tokenizer, processor, prefix=""):
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_task_names = ("mnli", "mnli-mm") if args.task_name == "mnli" else (args.task_name,)
     eval_outputs_dirs = (args.output_dir, args.output_dir + '-MM') if args.task_name == "mnli" else (args.output_dir,)
@@ -286,11 +286,18 @@ def evaluate(args, model, tokenizer, prefix=""):
         elif args.output_mode == "regression":
             preds = np.squeeze(preds)
 
-        processor = processors[args.task_name]()
+        #processor = processors[args.task_name]()
         binary_label_list = processor.get_binary_labels()
         multi_label_list = processor.get_multi_labels()
 
-        result_binary = compute_metrics(eval_task, preds_binary, out_label_ids_binary,binary_label_list)
+        logger.info(preds_binary)
+        logger.info(out_label_ids_binary)
+        logger.info(binary_label_list)
+        logger.info(preds_multi)
+        logger.info(out_label_ids_multi)
+        logger.info(multi_label_list)
+
+        result_binary = compute_metrics(eval_task, preds_binary, out_label_ids_binary, binary_label_list)
         result_multi = compute_metrics(eval_task, preds_multi, out_label_ids_multi,multi_label_list)
         results.update(result_binary)
         results.update(result_multi)
@@ -362,22 +369,32 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
         features = torch.load(cached_features_file)
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
-        binary_label_list = processor.get_binary_labels()
-        multi_label_list = processor.get_multi_labels()
         if task in ['mnli', 'mnli-mm'] and args.model_type in ['roberta']:
             # HACK(label indices are swapped in RoBERTa pretrained model)
             binary_label_list[1], binary_label_list[2] = binary_label_list[2], binary_label_list[1]
 
+        # if(args.do_eval):
+        #     examples = processor.get_dev_examples(args.data_dir)
+        #     logger.info(len(examples))
+        # elif(args.do_test):
+        #     examples = processor.get_test_examples(args.data_dir)
+        #     logger.info(len(examples))
+        # else:
+        #     examples = processor.get_train_examples(args.data_dir)
+        #     logger.info(len(examples))
+
         if(args.do_eval):
-            examples = processor.get_dev_examples(args.data_dir)
+            examples = processor.get_dev_examples(args.dev_file)
             logger.info(len(examples))
         elif(args.do_test):
-            examples = processor.get_test_examples(args.data_dir)
+            examples = processor.get_test_examples(args.test_file)
             logger.info(len(examples))
         else:
-            examples = processor.get_train_examples(args.data_dir)
+            examples = processor.get_train_examples(args.train_file)
             logger.info(len(examples))
 
+        binary_label_list = processor.get_binary_labels()
+        multi_label_list = processor.get_multi_labels()
 
         features = convert_examples_to_features(examples,
                                                 tokenizer,
@@ -442,11 +459,11 @@ def main():
     parser.add_argument("--do_test", action='store_true',
                         help="Whether to run eval on the test set.")
 
-    parser.add_argument("--train_file", default="train.tsv", type=str,
+    parser.add_argument("--train_file", default="", type=str,
                         help="Training file.")
-    parser.add_argument("--dev_file", default="dev.tsv", type=str,
+    parser.add_argument("--dev_file", default="", type=str,
                         help="Validation file.")
-    parser.add_argument("--test_file", default="test.tsv", type=str,
+    parser.add_argument("--test_file", default="", type=str,
                         help="Test file.")
     parser.add_argument("--results_file", default="eval_results.txt", type=str,
                         help="File name to write results.")
@@ -570,9 +587,19 @@ def main():
     processor = processors[args.task_name]()
 
 
-    processor.set_train_file(args.train_file)
-    processor.set_dev_file(args.dev_file)
-    processor.set_dev_file(args.test_file)
+    print(args.train_file)
+    print(args.test_file)
+    if (args.train_file!=""):
+        processor.set_train_file(args.train_file)
+        processor.set_dev_file(args.dev_file)
+
+    if(args.test_file!=""):
+        processor.set_test_file(args.test_file)
+    args.output_mode = output_modes[args.task_name]
+
+    # processor.set_train_file(args.train_file)
+    # processor.set_dev_file(args.dev_file)
+    # processor.set_dev_file(args.test_file)
 
     args.output_mode = output_modes[args.task_name]
     binary_label_list = processor.get_binary_labels()
@@ -652,7 +679,7 @@ def main():
             
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
-            result = evaluate(args, model, tokenizer, prefix=prefix)
+            result = evaluate(args, model, tokenizer, processor, prefix=prefix)
             result = dict((k + '_{}'.format(global_step), v) for k, v in result.items())
             results.update(result)
 

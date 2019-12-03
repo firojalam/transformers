@@ -74,10 +74,13 @@ def glue_convert_examples_to_features(examples, tokenizer,
             output_mode = glue_output_modes[task]
             logger.info("Using output mode %s for task %s" % (output_mode, task))
 
+    logger.info(binary_label_list)
+    logger.info(multi_label_list)
+
     binary_label_map = {label: i for i, label in enumerate(binary_label_list)}
     multi_label_map = {label: i for i, label in enumerate(multi_label_list)}
-    # print(multi_label_map)
-    # print(binary_label_map)
+    print(multi_label_map)
+    print(binary_label_map)
 
     features = []
     for (ex_index, example) in enumerate(examples):
@@ -133,6 +136,7 @@ def glue_convert_examples_to_features(examples, tokenizer,
         features.append(InputFeatures(input_ids=input_ids,
                               attention_mask=attention_mask,
                               token_type_ids=token_type_ids,
+                              label=None,
                               label_b=label_binary,label_m=label_multi))
 
     if is_tf_available() and is_tf_dataset:
@@ -464,6 +468,7 @@ class MultiClassProcessor(DataProcessor):
             label_list.append(label)
             examples.append(InputExample(guid=guid, text_a=text_a, text_b=None, label=label, label_b=None,label_m=None))
         labels=list(set(label_list))
+        labels.sort()
         self.set_labels(labels)
 
         return examples
@@ -480,12 +485,15 @@ class MultiTaskProcessor(DataProcessor):
 
     def set_train_file(self,file_name):
         self.train_file = file_name
+        self.get_train_examples(file_name)
 
     def set_dev_file(self,file_name):
         self.dev_file = file_name
+        self.get_dev_examples(file_name)
 
     def set_test_file(self,file_name):
         self.test_file = file_name
+        self.get_test_examples(file_name)
 
     def get_train_examples(self, file_name):
         """See base class."""
@@ -532,8 +540,8 @@ class MultiTaskProcessor(DataProcessor):
 
     def get_binary_labels(self):
         """See base class."""
-        if(not self.binary_labels ):
-            self.binary_labels=[0,1]
+        # if(not self.binary_labels ):
+        #     self.binary_labels=[0,1]
         return self.binary_labels
 
     def set_binary_labels(self,labels):
@@ -543,8 +551,8 @@ class MultiTaskProcessor(DataProcessor):
 
     def get_multi_labels(self):
         """See base class."""
-        if(not self.multi_labels ):
-            self.multi_labels=[0,1,2,3,4,5]
+        # if(not self.multi_labels ):
+        #     self.multi_labels=[0,1,2,3,4,5]
 
         return self.multi_labels
 
@@ -561,17 +569,20 @@ class MultiTaskProcessor(DataProcessor):
             if i == 0:
                 continue
             guid = "%s-%s" % (set_type, i)
-            text_a = line[0]
-            label_binary = int(line[1])
+            text_a = line[1]
+            label_binary = line[2]
             label_binary_list.append(label_binary)
-            label_multi = int(line[2])
+            label_multi = line[3]
             label_multi_list.append(label_multi)
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=None, label_b=label_binary,label_m=label_multi))
         labels=list(set(label_binary_list))
+        labels.sort()
         self.set_binary_labels(labels)
         print(labels)
+
         labels = list(set(label_multi_list))
+        labels.sort()
         self.set_multi_labels(labels)
         print(labels)
         return examples

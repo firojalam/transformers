@@ -119,9 +119,9 @@ if _has_sklearn:
         # logger.info(len(labels))
         # logger.info(list(set(preds)))
         # logger.info(len(preds))
-        # logger.info(label_list)
+        logger.info(label_list)
         label_map = [i for i, label in enumerate(label_list)]
-
+        logger.info(label_map)
         prf_per_class = classification_report(y_true=labels, y_pred=preds, digits=4, labels=label_map,output_dict=True)
         prf_per_class = format_classifaction_report(prf_per_class)
         # to calculate per class accuracy
